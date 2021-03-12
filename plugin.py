@@ -87,7 +87,7 @@ class CTI(supybot.callbacks.Plugin):
         return True
 
 
-    def _openVoting(self, channel, irc)
+    def _openVoting(self, channel, irc):
         self.gamesInProgress[channel]['vote'] = True
         self.gamesInProgress[channel]['votes'] = []
         capts = self.gamesInProgress[channel]['captions']
