@@ -50,6 +50,7 @@ class CTI(supybot.callbacks.Plugin):
         self.__parent.__init__(irc)
 
         self.gamesInProgress = {}
+        # TODO: Make this a config option.
         self.voteticks = 12
 
 
@@ -72,11 +73,13 @@ class CTI(supybot.callbacks.Plugin):
         winner = dict(sorted(nicks.items(), key=lambda item: item[1]))[0]
         # FIXME: need to check for ties here.
         irc.reply(f'The winner is {winner}.')
+        # TODO: Implement persistent score code and code to view scores.
         del self.gamesInProgress[channel]
         
 
     def _image(self, url):
         req = urllib.request.Request(url)
+        # TODO: Make this a config option.
         req.add_header('User-Agent', 'Mozilla/5.0')
         try:
             resp = urllib.request.urlopen(req)
@@ -91,6 +94,7 @@ class CTI(supybot.callbacks.Plugin):
         self.gamesInProgress[channel]['vote'] = True
         self.gamesInProgress[channel]['votes'] = []
         capts = self.gamesInProgress[channel]['captions']
+        # TODO: make list of captions on voting random.
         captions = dict(sorted(capts.items(), key=lambda item: item[1]))
         capts = list(captions.values())
         self.nicks = list(captions.keys())
@@ -117,6 +121,7 @@ class CTI(supybot.callbacks.Plugin):
             except KeyError:
                 pass
             # Add a new game tick timer callback every 15 seconds
+            # TODO: Make this a config option.
             schedule.addPeriodicEvent(tick, 15, f'CTImer{channel}')
             min, sec = divmod(self.ticks * 15, 60)
             msg = '.'
@@ -140,6 +145,7 @@ class CTI(supybot.callbacks.Plugin):
                 irc.reply('Voting open, cast your votes.')
                 _openVoting(channel, irc)
             return
+        # TODO: figure out a better way to callback for this so game timer stops on voting.
         elif ticks > self.voteTicks:
             captions = len(self.gamesInProgress[channel]['captions'])
             votes = len(self.gamesInProgress[channel]['votes'])
@@ -153,7 +159,7 @@ class CTI(supybot.callbacks.Plugin):
                 )
         else:
             rem = (voteTicks - ticks) * 15
-            if sec in ['60', '30']
+            if sec in ['60', '30'] # TODO: Make this a config option.
             irc.reply(f'{secondsRemain} seconds until voting, enter your captions.')
         self.gamesInProgress[channel]['ticks'] = ticks
 
@@ -172,6 +178,7 @@ class CTI(supybot.callbacks.Plugin):
         """Play CTI for a given Image URL"""
         channel, message = msg.args[0:2]
 
+        # TODO: Make this a config option.
         urlRe = utils.web._httpUrlRe
         url = re.findall(url_re, message)
 
@@ -193,6 +200,7 @@ class CTI(supybot.callbacks.Plugin):
         if not self._dm(irc, 'caption'):
             return
         if channel in self.gamesInProgress:
+            # FIXME: should only be allowed until voting starts.
             self.gamesInProgress[channel]['captions'][msg.nick] = message
             irc.reply(f'Your caption is set to: {message}, you may change until voting opens.')
         else:
