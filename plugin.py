@@ -36,7 +36,7 @@ import supybot.utils as utils
 
 try:
     from supybot.i18n import PluginInternationalization
-    _ = PluginInternationalization('SpiffyWeb')
+    _ = PluginInternationalization('CTI')
 except ImportError:
     _ = lambda x: x
 
@@ -60,6 +60,21 @@ class CTI(supybot.callbacks.Plugin):
         return True
 
 
+    def _endGame(self, channel, irc):
+        schedule.removeEvent(f'CTImer{channel}')
+        nicks = {}
+        for vote in self.gamesInProgress[channel]['votes']:
+            nick = self.nicks[vote - 1]
+            if nick in nicks:
+                nicks[nick] = nicks[nick] + 1
+            else:
+                nicks[nick] = 1
+        winner = dict(sorted(nicks.items(), key=lambda item: item[1]))[0]
+        # FIXME: need to check for ties here.
+        irc.reply(f'The winner is {winner}.')
+        del self.gamesInProgress[channel]
+        
+
     def _image(self, url):
         req = urllib.request.Request(url)
         req.add_header('User-Agent', 'Mozilla/5.0')
@@ -72,6 +87,20 @@ class CTI(supybot.callbacks.Plugin):
         return True
 
 
+    def _openVoting(self, channel, irc)
+        self.gamesInProgress[channel]['vote'] = True
+        self.gamesInProgress[channel]['votes'] = []
+        capts = self.gamesInProgress[channel]['captions']
+        captions = dict(sorted(capts.items(), key=lambda item: item[1]))
+        capts = list(captions.values())
+        self.nicks = list(captions.keys())
+        for nick in captions:
+            ircmsgs.privmsg(nick, 'Cast your vote with: vote {channel} <num>')
+            for capt in capts:
+                idx = capts.index(capt) + 1
+                ircmsgs.privmsg(nick, f'{idx}: {capt}')
+
+
     def _startGame(self, channel, irc, url):
         if channel in self.gamesInProgress:
             irc.reply('A game is already in progress.')
@@ -79,6 +108,9 @@ class CTI(supybot.callbacks.Plugin):
         else:
             if not _image(url):
                 irc.reply('Please give a valid direct image link to start a game.')
+                return
+            else:
+                irc.reply(f'Capture That Image, /msg {irc.nick} caption {channel} <your caption>')
             # Check for a stale timer.
             try:
                 schedule.removeEvent(f'CTImer{channel}')
@@ -86,18 +118,54 @@ class CTI(supybot.callbacks.Plugin):
                 pass
             # Add a new game tick timer callback every 15 seconds
             schedule.addPeriodicEvent(tick, 15, f'CTImer{channel}')
+            min, sec = divmod(self.ticks * 15, 60)
+            msg = '.'
+            if sec > 0:
+                msg = f' and {sec} seconds.'
+            irc.reply(f'Voting opens in {min} minutes{msg}')
 
 
             def timerEvent():
                 self._tick(channel, irc)
+
 
     def _tick(self, channel, irc):
         if not 'ticks' in self.gamesInProgress[channel]:
             self.gamesInProgress[channel]['ticks'] = 0
         ticks = self.gamesInProgress[channel]['ticks'] + 1
         if ticks == self.voteTicks:
-            
+            if len(self.gamesInProgress[channel]['captions']) < 3:
+                irc.reply('Too few captions entered, ending the game.')
+            else:
+                irc.reply('Voting open, cast your votes.')
+                _openVoting(channel, irc)
+            return
+        elif ticks > self.voteTicks:
+            captions = len(self.gamesInProgress[channel]['captions'])
+            votes = len(self.gamesInProgress[channel]['votes'])
+            if captions == votes:
+                irc.reply('Voting closed, all players have voted.')
+                _endGame(channel, irc)
+            else:
+                irc.reply(
+                    f'{votes} of {captions} players have voted, '
+                    'if you have not voted yet please vote now.'
+                )
+        else:
+            rem = (voteTicks - ticks) * 15
+            if sec in ['60', '30']
+            irc.reply(f'{secondsRemain} seconds until voting, enter your captions.')
         self.gamesInProgress[channel]['ticks'] = ticks
+
+
+    def _vote(self, channel, nick, vote):
+        if vote > 0 and vote < len(self.gamesInProgress[channel]['captions']) + 1:
+            if self.nicks[vote] == nick:
+                return 'You cannot vote for your own caption!'
+            else:
+                self.gamesInProgress[channel]['votes'][nick] = vote
+                return f'Vote cast for {vote}.'
+        return 'Invalid caption number.'
 
 
     def cti(self, irc, msg, args, query):
@@ -109,30 +177,49 @@ class CTI(supybot.callbacks.Plugin):
 
         if url:
             _startGame(channel, irc, url[0])
+            self.gamesInProgress[channel]['captions'] = {}
+            self.gamesInProgress[channel]['votes'] = {}
+            return
         else:
             irc.reply('Please give a url to an image to start game.')
             return
 
 
-    cti = wrap(t, ["text"])
+    cti = wrap(cti, ['text'])
 
 
     def caption(self, irc, msg, args, query):
-        channel, message = msg.args[0:2]
+        channel, message = args[0:2]
         if not self._dm(irc, 'caption'):
             return
+        if channel in self.gamesInProgress:
+            self.gamesInProgress[channel]['captions'][msg.nick] = message
+            irc.reply(f'Your caption is set to: {message}, you may change until voting opens.')
+        else:
+            irc.reply('There is no game in progress in that channel.')
 
 
-    caption = wrap(t, ["text"])
+    caption = wrap(caption, ['validChannel','text'])
 
 
-    def votecap(self, irc, msg, arge, query):
-        channel, message = msg.args[0:2]
+    def votecap(self, irc, msg, args, query):
+        channel, message = args[0:2]
         if not self._dm('vote'):
             return
+        if channel in self.gamesInProgress:
+            if self.gamesInProgress[channel]['voting']:
+                if msg.nick in self.gamesInProgress[channel]['captions']:
+                    result = self._vote(channel, msg.nick, message):
+                    irc.reply(result)
+                else:
+                    irc.reply('You did not submit a caption, you cannot vote.')
+            else:
+                irc.reply('Voting has not started yet.')
+        else:
+            irc.reply('I have no game in progress in that channel')
 
 
-    votecap = wrap(t, ["text"])
+    votecap = wrap(votecap, ['validChannel','int'])
 
 
 Class = CTI
