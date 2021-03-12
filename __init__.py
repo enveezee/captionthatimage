@@ -33,7 +33,7 @@ import supybot.world as world
 if world.testing:
     from . import test
 
-__version__ = "2021.03.10+git"
+__version__ = "2021.03.11+git"
 
 __author__ = supybot.Author("enveezee", "nvz", "enveezee@gmail.com")
 
